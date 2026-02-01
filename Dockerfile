@@ -77,10 +77,8 @@ USER appuser
 # Expose port (default 8080, can be overridden by PORT env var)
 EXPOSE 8080
 
-# Health check using PORT env var (defaults to 8080)
-# Increased start-period to 60s to allow for slower startup
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/webhooks/health || exit 1
+# Note: Sevalla uses its own Liveness/Readiness probes configured in the dashboard
+# Docker HEALTHCHECK is ignored by Sevalla, so we don't include it here
 
 # Start the app
 CMD ["node", "dist/index.js"]

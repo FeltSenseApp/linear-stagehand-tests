@@ -109,7 +109,8 @@ export class TestQueue {
   }
 }
 
-// Singleton instance - max 3 concurrent browser sessions
+// Singleton instance - default to 1 concurrent test to prevent memory issues on Sevalla
+// Can be increased via MAX_CONCURRENT_TESTS env var if pod has sufficient resources
 export const testQueue = new TestQueue(
-  parseInt(process.env.MAX_CONCURRENT_TESTS || "3", 10)
+  parseInt(process.env.MAX_CONCURRENT_TESTS || "1", 10)
 );
