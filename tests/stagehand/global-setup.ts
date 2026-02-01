@@ -95,6 +95,24 @@ export async function setup() {
 
   try {
     await stagehand.init();
+  } catch (initError) {
+    const errorMessage = initError instanceof Error ? initError.message : String(initError);
+    
+    // Handle Browserbase concurrent session limit
+    if (errorMessage.includes("429") || errorMessage.includes("concurrent sessions")) {
+      console.error("\n❌ Browserbase session limit reached!");
+      console.error("   There may be an existing session still running.");
+      console.error("   Options:");
+      console.error("   1. Wait for the existing session to timeout (usually 5-10 min)");
+      console.error("   2. Manually close sessions at https://www.browserbase.com/sessions");
+      console.error("   3. Remove BROWSERBASE_* env vars to use local Chrome\n");
+      throw new Error("Browserbase concurrent session limit reached - see above for options");
+    }
+    
+    throw initError;
+  }
+
+  try {
     const page = stagehand.context.pages()[0];
 
     // Navigate to login

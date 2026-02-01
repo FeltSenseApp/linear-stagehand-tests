@@ -1,17 +1,21 @@
 import { defineConfig } from "vitest/config";
 
+// Check if Browserbase is configured (has session limits)
+const useBrowserbase = !!(process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID);
+
 export default defineConfig({
   test: {
     // Increase timeout for browser automation tests
     testTimeout: 90000, // 90 seconds per test (reduced since auth is cached)
     hookTimeout: 90000,
 
-    // Run all test files in parallel - each gets its own browser instance
-    fileParallelism: true,
+    // Browserbase has concurrent session limits (often just 1)
+    // Run tests sequentially when using Browserbase, parallel for local Chrome
+    fileParallelism: !useBrowserbase,
     
-    // No limit on concurrent tests - run everything at once
-    // Each test file creates its own Stagehand/browser, so this is safe
-    maxConcurrency: Infinity,
+    // Limit concurrency based on browser mode
+    // Browserbase: sequential (1), Local: unlimited parallel
+    maxConcurrency: useBrowserbase ? 1 : Infinity,
 
     // Include test files
     include: ["tests/**/*.test.ts"],

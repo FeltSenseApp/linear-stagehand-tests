@@ -63,7 +63,23 @@ export async function createStagehand(): Promise<Stagehand> {
     }),
   });
 
-  await stagehand.init();
+  try {
+    await stagehand.init();
+  } catch (initError) {
+    const errorMessage = initError instanceof Error ? initError.message : String(initError);
+    
+    // Handle Browserbase concurrent session limit
+    if (errorMessage.includes("429") || errorMessage.includes("concurrent sessions")) {
+      throw new Error(
+        "Browserbase concurrent session limit reached. " +
+        "Either wait for existing sessions to timeout, " +
+        "close them at https://www.browserbase.com/sessions, " +
+        "or remove BROWSERBASE_* env vars to use local Chrome."
+      );
+    }
+    
+    throw initError;
+  }
 
   // Load cached cookies for authentication
   const cookies = loadCookies();
