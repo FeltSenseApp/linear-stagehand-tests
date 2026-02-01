@@ -1,24 +1,11 @@
 import { Stagehand } from "@browserbasehq/stagehand";
 import * as fs from "fs";
 import * as path from "path";
-import os from "os";
 import dotenv from "dotenv";
+import { logResourceInfo } from "./utils/resource-optimizer.js";
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-
-/**
- * Log current resource usage for debugging
- */
-function logResourceUsage(): void {
-  const totalMemoryMB = Math.round(os.totalmem() / 1024 / 1024);
-  const freeMemoryMB = Math.round(os.freemem() / 1024 / 1024);
-  const usedMemoryMB = totalMemoryMB - freeMemoryMB;
-  const cpuCores = os.cpus().length;
-  const usagePercent = Math.round((usedMemoryMB / totalMemoryMB) * 100);
-
-  console.log(`  → Resources: ${usedMemoryMB}/${totalMemoryMB}MB memory (${usagePercent}%), ${cpuCores} CPUs`);
-}
 
 // Use project root for auth files to ensure consistency across all run contexts
 const AUTH_DIR = path.join(process.cwd(), "tests", "stagehand");
@@ -37,7 +24,7 @@ export interface AuthState {
  */
 export async function setup() {
   console.log("\n🔧 Global Setup: Initializing browser and logging in...\n");
-  logResourceUsage();
+  logResourceInfo();
 
   const portalUrl = process.env.PORTAL_URL || "http://localhost:5173";
   const username = process.env.PORTAL_USERNAME;
