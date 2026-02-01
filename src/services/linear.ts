@@ -423,11 +423,19 @@ export function shouldTriggerE2ETests(payload: LinearWebhookPayload): boolean {
   }
 
   // Check if the issue is in the "QA" state
-  const qaStates = ["qa", "quality assurance", "e2e testing", "e2e"];
+  const qaStates = ["qa", "quality assurance", "e2e testing", "e2e", "in qa", "qa review"];
 
   const currentState = payload.data.state?.name?.toLowerCase();
+  console.log(`[Linear] Issue state: "${payload.data.state?.name}" (normalized: "${currentState}")`);
+  
   if (currentState && qaStates.includes(currentState)) {
-    console.log(`[Linear] Issue moved to QA state: "${payload.data.state?.name}"`);
+    console.log(`[Linear] Issue moved to QA state: "${payload.data.state?.name}" - triggering E2E tests`);
+    return true;
+  }
+
+  // Also check if state name contains "qa" (partial match)
+  if (currentState && currentState.includes("qa")) {
+    console.log(`[Linear] Issue state contains "qa": "${payload.data.state?.name}" - triggering E2E tests`);
     return true;
   }
 
@@ -441,5 +449,6 @@ export function shouldTriggerE2ETests(payload: LinearWebhookPayload): boolean {
     return true;
   }
 
+  console.log(`[Linear] State "${currentState}" does not match QA states: ${qaStates.join(", ")}`);
   return false;
 }

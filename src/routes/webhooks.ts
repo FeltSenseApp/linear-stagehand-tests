@@ -154,7 +154,49 @@ router.post("/linear", async (req: Request, res: Response): Promise<void> => {
     `[Webhook] Received ${payload.action} event for ${payload.type}: ${payload.data.title}`
   );
 
-  // Check if this event should trigger tests
+  // Check if this event should trigger E2E tests (issue moved to QA)
+  if (shouldTriggerE2ETests(payload)) {
+    const issueId = payload.data.id;
+    const issueIdentifier = payload.data.identifier;
+
+    // Prevent duplicate E2E test runs
+    const existingE2ETest = e2eIssueTests.get(issueId);
+    if (existingE2ETest && existingE2ETest.status !== "completed") {
+      console.warn(`[Webhook] E2E tests already ${existingE2ETest.status} for issue ${issueId}`);
+      res.status(409).json({
+        error: `E2E tests already ${existingE2ETest.status} for this issue`,
+        issueId,
+      });
+      return;
+    }
+
+    // Mark as running
+    e2eIssueTests.set(issueId, { status: "running" });
+
+    console.log(`[Webhook] Issue moved to QA - triggering E2E tests for ${issueIdentifier || issueId}`);
+
+    // Acknowledge the webhook immediately
+    res.status(202).json({
+      message: "E2E tests started",
+      issueId,
+      issueIdentifier,
+      stateName: payload.data.state?.name,
+    });
+
+    // Run E2E tests asynchronously
+    runE2ETests({ issueId, issueIdentifier })
+      .catch((error) => {
+        console.error(`\n⚠ E2E test error for ${issueIdentifier || issueId}:`, error);
+      })
+      .finally(() => {
+        e2eIssueTests.set(issueId, { status: "completed" });
+        setTimeout(() => e2eIssueTests.delete(issueId), 60 * 60 * 1000);
+      });
+
+    return;
+  }
+
+  // Check if this event should trigger acceptance criteria tests
   if (!shouldTriggerTests(payload)) {
     console.log("[Webhook] Event does not trigger tests - skipping");
     res.status(200).json({ message: "Event acknowledged, no tests triggered" });
