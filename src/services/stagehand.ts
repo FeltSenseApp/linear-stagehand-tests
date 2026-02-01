@@ -80,13 +80,25 @@ export async function runTestsForIssue(
   console.log(`[Stagehand] Starting test run for issue ${issue.identifier || issue.id}`);
   console.log(`[Stagehand] Acceptance criteria to verify: ${issue.acceptanceCriteria.length}`);
 
-  // Initialize Stagehand with local Chrome
+  // Use Browserbase for cloud deployments, local Chrome for development
+  const useBrowserbase = !!(process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID);
+  
+  if (useBrowserbase) {
+    console.log("[Stagehand] Using Browserbase for cloud browser automation");
+  }
+
+  // Initialize Stagehand
   const stagehand = new Stagehand({
-    env: "LOCAL",
+    env: useBrowserbase ? "BROWSERBASE" : "LOCAL",
     verbose: 1,
-    localBrowserLaunchOptions: {
-      headless: true, // Run headless for server environments
-    },
+    ...(useBrowserbase ? {
+      apiKey: process.env.BROWSERBASE_API_KEY,
+      projectId: process.env.BROWSERBASE_PROJECT_ID,
+    } : {
+      localBrowserLaunchOptions: {
+        headless: true, // Run headless for server environments
+      },
+    }),
   });
 
   const screenshots: string[] = [];
@@ -96,7 +108,15 @@ export async function runTestsForIssue(
   let screenshotCapture: { stop: () => void } | undefined;
 
   try {
-    await stagehand.init();
+    // Add timeout to prevent hanging on Browserbase connection issues
+    const INIT_TIMEOUT_MS = 60000; // 60 seconds
+    
+    const initPromise = stagehand.init();
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Stagehand init timed out after ${INIT_TIMEOUT_MS / 1000}s`)), INIT_TIMEOUT_MS);
+    });
+    
+    await Promise.race([initPromise, timeoutPromise]);
     console.log("[Stagehand] Browser initialized");
 
     const page = stagehand.context.pages()[0];

@@ -64,9 +64,26 @@ export async function createStagehand(): Promise<Stagehand> {
   });
 
   try {
-    await stagehand.init();
+    // Add timeout to prevent hanging on Browserbase connection issues
+    const INIT_TIMEOUT_MS = 60000; // 60 seconds
+    
+    const initPromise = stagehand.init();
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Stagehand init timed out after ${INIT_TIMEOUT_MS / 1000}s`)), INIT_TIMEOUT_MS);
+    });
+    
+    await Promise.race([initPromise, timeoutPromise]);
   } catch (initError) {
     const errorMessage = initError instanceof Error ? initError.message : String(initError);
+    
+    // Handle timeout
+    if (errorMessage.includes("timed out")) {
+      throw new Error(
+        "Stagehand initialization timed out. " +
+        "This could be due to Browserbase service issues or network problems. " +
+        "Check https://www.browserbase.com/status for service status."
+      );
+    }
     
     // Handle Browserbase concurrent session limit
     if (errorMessage.includes("429") || errorMessage.includes("concurrent sessions")) {

@@ -1,0 +1,1 @@
+Make a plan before your implementation. Take into account:
