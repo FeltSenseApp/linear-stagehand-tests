@@ -1,8 +1,40 @@
 import { defineConfig } from "vitest/config";
+import os from "os";
 
-// Limit parallelism to prevent memory issues on deployed servers
-// Each test file creates a vitest worker + Stagehand connection
-const MAX_WORKERS = parseInt(process.env.VITEST_MAX_WORKERS || "1", 10);
+/**
+ * Resource-Aware Worker Optimizer
+ * Calculates optimal workers based on 80% of available resources
+ */
+const MEMORY_PER_WORKER_MB = 200; // Estimated memory per vitest worker + Stagehand
+const RESOURCE_THRESHOLD = 0.8;   // Use 80% of available resources
+const MIN_WORKERS = 1;
+const MAX_WORKERS = 10;
+
+function calculateOptimalWorkers(): number {
+  // Allow manual override
+  const envWorkers = process.env.VITEST_MAX_WORKERS;
+  if (envWorkers) {
+    const parsed = parseInt(envWorkers, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.min(parsed, MAX_WORKERS);
+    }
+  }
+
+  const freeMemoryMB = Math.round(os.freemem() / 1024 / 1024);
+  const cpuCores = os.cpus().length;
+
+  // Calculate workers based on resources (80% threshold)
+  const memoryBasedWorkers = Math.floor((freeMemoryMB * RESOURCE_THRESHOLD) / MEMORY_PER_WORKER_MB);
+  const cpuBasedWorkers = Math.floor(cpuCores * RESOURCE_THRESHOLD);
+
+  // Use the lower of the two, clamped to bounds
+  const workers = Math.max(MIN_WORKERS, Math.min(MAX_WORKERS, Math.min(memoryBasedWorkers, cpuBasedWorkers)));
+
+  console.log(`[Vitest] Resource optimization: ${freeMemoryMB}MB free, ${cpuCores} CPUs → ${workers} workers`);
+  return workers;
+}
+
+const OPTIMAL_WORKERS = calculateOptimalWorkers();
 
 export default defineConfig({
   test: {
@@ -10,17 +42,17 @@ export default defineConfig({
     testTimeout: 90000, // 90 seconds per test (reduced since auth is cached)
     hookTimeout: 90000,
 
-    // IMPORTANT: Disable file parallelism to prevent memory issues
-    // Each parallel worker consumes memory for vitest + Stagehand SDK
-    fileParallelism: false,
+    // Enable file parallelism with resource-aware limits
+    // Workers are calculated based on 80% of available memory/CPU
+    fileParallelism: OPTIMAL_WORKERS > 1,
     
-    // Limit concurrent tests within a file
-    maxConcurrency: MAX_WORKERS,
+    // Limit concurrent tests based on available resources
+    maxConcurrency: OPTIMAL_WORKERS,
     
-    // Limit worker threads to prevent memory exhaustion
+    // Limit worker threads based on resources
     poolOptions: {
       threads: {
-        maxThreads: MAX_WORKERS,
+        maxThreads: OPTIMAL_WORKERS,
         minThreads: 1,
       },
     },
