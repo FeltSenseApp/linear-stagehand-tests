@@ -4,16 +4,18 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 # Build-time args for secrets/config; also exported to runtime env for the app.
-ARG PORTAL_URL=""
-ARG PORTAL_USERNAME=""
-ARG PORTAL_PASSWORD=""
-ARG LINEAR_WEBHOOK_SECRET=""
-ARG LINEAR_API_KEY=""
-ARG BROWSERBASE_API_KEY=""
-ARG BROWSERBASE_PROJECT_ID=""
-ARG MAX_CONCURRENT_TESTS=""
+ARG PORT=8080 \
+    PORTAL_URL="" \
+    PORTAL_USERNAME="" \
+    PORTAL_PASSWORD="" \
+    LINEAR_WEBHOOK_SECRET="" \
+    LINEAR_API_KEY="" \
+    BROWSERBASE_API_KEY="" \
+    BROWSERBASE_PROJECT_ID="" \
+    MAX_CONCURRENT_TESTS=""
 
-ENV PORTAL_URL=${PORTAL_URL} \
+ENV PORT=${PORT} \
+    PORTAL_URL=${PORTAL_URL} \
     PORTAL_USERNAME=${PORTAL_USERNAME} \
     PORTAL_PASSWORD=${PORTAL_PASSWORD} \
     LINEAR_WEBHOOK_SECRET=${LINEAR_WEBHOOK_SECRET} \
@@ -94,8 +96,6 @@ RUN mkdir -p test-results screenshots && chown -R appuser:appuser /app
 USER appuser
 
 # Expose port (default 8080, can be overridden by PORT build arg)
-ARG PORT=8080
-ENV PORT=${PORT}
 EXPOSE ${PORT}
 
 # Note: Sevalla uses its own Liveness/Readiness probes configured in the dashboard
