@@ -1,0 +1,67 @@
+# cloudbuild.yml for backend services
+# Expects substitutions from the trigger:
+#   _PROJECT, _SERVICE, _REGION, _DKREGISTRY, _TAG, _CLOUD_RUN, _SVC_AGENT
+# Build: docker build . (Dockerfile at repo root)
+# Push:  ${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:{_TAG,latest}
+# Optional: deploy to Cloud Run
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - '-t'
+      - '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:${_TAG}'
+      - '-t'
+      - '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:latest'
+      - '--build-arg'
+      - PORTAL_URL=${_PORTAL_URL}
+      - '--build-arg'
+      - PORTAL_USERNAME=${_PORTAL_USERNAME}
+      - '--build-arg'
+      - PORTAL_PASSWORD=${_PORTAL_PASSWORD}
+      - '--build-arg'
+      - LINEAR_WEBHOOK_SECRET=${_LINEAR_WEBHOOK_SECRET}
+      - '--build-arg'
+      - LINEAR_API_KEY=${_LINEAR_API_KEY}
+      - '--build-arg'
+      - BROWSERBASE_API_KEY=${_BROWSERBASE_API_KEY}
+      - '--build-arg'
+      - BROWSERBASE_PROJECT_ID=${_BROWSERBASE_PROJECT_ID}
+      - '--build-arg'
+      - MAX_CONCURRENT_TESTS=${_MAX_CONCURRENT_TESTS}
+      - '--build-arg'
+      - PORT=${_DOCKER_PORT}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push-latest
+    args: ['push', '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:latest']
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push-tag
+    args: ['push', '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:${_TAG}']
+
+  # Optional: Deploy to Cloud Run (remove if you deploy elsewhere)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - '${_CLOUD_RUN}'
+      - '--image=${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:${_TAG}'
+      - '--region=${_REGION}'
+      - '--service-account=${_SVC_AGENT}'
+      - '--allow-unauthenticated'  # drop if keeping ingress internal
+
+serviceAccount: 'projects/${_PROJECT}/serviceAccounts/terraform-svc@${_PROJECT}.iam.gserviceaccount.com'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: "1800s"
+
+images:
+  - '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:${_TAG}'
+  - '${_DKREGISTRY}/${_PROJECT}/docker/${_SERVICE}:latest'
