@@ -1,14 +1,10 @@
-# Nixpacks configuration
-# See: https://nixpacks.com/docs/configuration/file
-
-[phases.setup]
-nixPkgs = ["nodejs_20"]
+# Bun is auto-detected from bun.lock
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["bun install --frozen-lockfile"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["bun run build"]
 
 [start]
-cmd = "node dist/index.js"
+cmd = "bun run dist/index.js"

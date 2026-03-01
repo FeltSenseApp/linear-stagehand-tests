@@ -16,7 +16,7 @@ Linear Webhook → Express Server → Parse ACs → Stagehand Agent → Local Ch
 
 ## Requirements
 
-- **Node.js 18+**
+- **Bun** (v1.0+) — [install Bun](https://bun.sh/docs/installation)
 - **Chrome** installed locally (Stagehand uses it for automation)
 - **OpenAI API key** (for the AI agent)
 
@@ -39,7 +39,7 @@ sudo apt-get install -f
 You may need to install additional dependencies or use `xvfb`:
 ```bash
 sudo apt-get install xvfb
-xvfb-run npm start
+xvfb-run bun start
 ```
 
 ## Setup
@@ -47,7 +47,7 @@ xvfb-run npm start
 ### 1. Install Dependencies
 
 ```bash
-npm install
+bun install
 ```
 
 ### 2. Configure Environment
@@ -78,13 +78,13 @@ PORT=3000
 
 **Development (with hot reload):**
 ```bash
-npm run dev
+bun run dev
 ```
 
 **Production:**
 ```bash
-npm run build
-npm start
+bun run build
+bun start
 ```
 
 ## Linear Webhook Configuration
@@ -133,7 +133,7 @@ The agent extracts ACs from the issue description. Supported formats:
 Run a test without a webhook:
 
 ```bash
-npm run test:manual
+bun run test:manual
 ```
 
 This uses mock acceptance criteria to verify your Stagehand setup works.
@@ -200,12 +200,12 @@ docker-compose down
 
 1. Build the project:
 ```bash
-npm run build
+bun run build
 ```
 
 2. Set environment variables and run:
 ```bash
-NODE_ENV=production node dist/index.js
+NODE_ENV=production bun run dist/index.js
 ```
 
 ### Environment Variables for Production

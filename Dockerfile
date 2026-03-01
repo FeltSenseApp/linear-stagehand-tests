@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-slim AS builder
+FROM oven/bun:1-debian AS builder
 
 WORKDIR /app
 
@@ -24,21 +24,21 @@ ENV PORT=${PORT} \
     BROWSERBASE_PROJECT_ID=${BROWSERBASE_PROJECT_ID} \
     MAX_CONCURRENT_TESTS=${MAX_CONCURRENT_TESTS}
 
-# Copy package files
-COPY package*.json ./
+# Copy package files and lockfile
+COPY package.json bun.lock* ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy source
 COPY tsconfig.json ./
 COPY src ./src
 
 # Build TypeScript
-RUN npm run build
+RUN bun run build
 
-# Production stage
-FROM node:20-slim
+# Production stage: Debian-based image for Chrome
+FROM oven/bun:1-debian
 
 # Install Chrome dependencies
 RUN apt-get update && apt-get install -y \
@@ -66,8 +66,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
@@ -80,7 +80,8 @@ WORKDIR /app
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/bun.lock* ./
 
 # Copy static files
 COPY public ./public
@@ -101,5 +102,5 @@ EXPOSE ${PORT}
 # Note: Sevalla uses its own Liveness/Readiness probes configured in the dashboard
 # Docker HEALTHCHECK is ignored by Sevalla, so we don't include it here
 
-# Start the app
-CMD ["node", "dist/index.js"]
+# Start the app with Bun
+CMD ["bun", "run", "dist/index.js"]
