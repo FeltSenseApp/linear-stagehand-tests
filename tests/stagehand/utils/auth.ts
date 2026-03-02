@@ -73,7 +73,7 @@ export async function loginWithAgent(
 
   const result = await page.extract({
     instruction: "Check if login was successful",
-    schema: LoginResultSchema,
+    schema: LoginResultSchema as any,
   });
 
   return result;

@@ -1,8 +1,7 @@
 import { Stagehand } from "@browserbasehq/stagehand";
-import * as fs from "fs";
 import * as path from "path";
 import dotenv from "dotenv";
-import { logResourceInfo } from "./utils/resource-optimizer.js";
+import { seedDemoProfile } from "./utils/seed-profile";
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -13,7 +12,9 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env") });
  */
 export async function setup() {
   console.log("\n🔧 Global Setup: Initializing browser and logging in...\n");
-  logResourceInfo();
+  // Make sure the demo profile exists for the auth user
+  console.log("  → Seeding Supabase demo profile...");
+  await seedDemoProfile();
 
   const portalUrl = process.env.PORTAL_URL || "http://localhost:5173";
   const username = process.env.PORTAL_USERNAME;
@@ -23,7 +24,7 @@ export async function setup() {
     throw new Error("PORTAL_USERNAME and PORTAL_PASSWORD are required");
   }
 
-  // Always log in fresh (no cached auth / previous sessions)
+  // Always log in fresh
   // Use Browserbase for cloud deployments, local Chrome for development
   const useBrowserbase = !!(process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID);
   
@@ -63,10 +64,11 @@ export async function setup() {
     const page = stagehand.context.pages()[0];
 
     // Navigate to login
-    await page.goto(`${portalUrl}/login`);
+    await page.goto(`${portalUrl}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
 
-    // Use act() for self-healing login - variables keep credentials out of LLM prompts
+    // Use act() for self-healing login
     console.log("  → Filling login form (act)...");
     await page.act({
       action: "type %username% into the email input field",
@@ -87,7 +89,6 @@ export async function setup() {
     const currentUrl = page.url();
     if (currentUrl.includes("/login")) {
       console.log("  ✗ Login failed - still on login page");
-      console.log(`    Current URL: ${currentUrl}`);
       throw new Error("Global setup login failed - check credentials");
     }
 
