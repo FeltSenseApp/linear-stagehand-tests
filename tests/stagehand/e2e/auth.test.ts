@@ -7,7 +7,7 @@ import {
   BASE_URL,
   TEST_TIMEOUT,
 } from "../stagehand.config";
-import { LoginResultSchema } from "../utils/auth";
+import { LoginResultSchema, loginWithAgent } from "../utils/auth";
 
 describe("Authentication", () => {
   let stagehand: Stagehand;
@@ -29,22 +29,12 @@ describe("Authentication", () => {
   it(
     "should login successfully with valid credentials",
     async () => {
-      const page = stagehand.context.pages()[0];
-      await page.goto(`${BASE_URL}/login`);
-      await page.waitForLoadState("networkidle");
-
-      // Use direct Playwright for faster login
-      await fillLoginForm(page, envs.portalUsername, envs.portalPassword);
-
-      // Wait for navigation
-      await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(1000); // Brief wait for auth
-
-      // Verify login success
-      const loginResult = await page.extract({
-        instruction: "Check if login was successful by looking for sidebar navigation",
-        schema: LoginResultSchema,
-      });
+      // Use Stagehand agent-based login (no hard-coded selectors)
+      const loginResult = await loginWithAgent(
+        stagehand,
+        envs.portalUsername,
+        envs.portalPassword
+      );
 
       expect(loginResult.sidebarVisible).toBe(true);
       expect(loginResult.errorVisible).toBe(false);
@@ -59,44 +49,17 @@ describe("Authentication", () => {
       
       // Clear any previous auth
       await stagehand.context.clearCookies();
-      
-      await page.goto(`${BASE_URL}/login`);
-      await page.waitForLoadState("networkidle");
 
-      // Use direct Playwright for faster input
-      await fillLoginForm(page, "invalid@example.com", "wrongpassword123");
+      // Attempt login with invalid credentials using Stagehand agent
+      const result = await loginWithAgent(
+        stagehand,
+        "invalid@example.com",
+        "wrongpassword123"
+      );
 
-      // Wait for response
-      await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(2000); // Wait for error message
-
-      // Use Playwright to check directly - more reliable than AI extraction
-      const currentUrl = page.url();
-      const stillOnLogin = currentUrl.includes("/login");
-      
-      // Check for error via Playwright selectors (common error patterns)
-      const errorSelectors = [
-        '[role="alert"]',
-        '.error',
-        '.toast',
-        '[data-testid="error"]',
-        'text=/invalid|incorrect|failed|error/i',
-      ];
-      
-      let errorFound = false;
-      for (const selector of errorSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el) {
-            errorFound = true;
-            break;
-          }
-        } catch {}
-      }
-
-      // Should still be on login page (not redirected to dashboard)
-      // This is the main check - invalid credentials shouldn't log us in
-      expect(stillOnLogin).toBe(true);
+      // For invalid credentials, we expect an error and no sidebar
+      expect(result.sidebarVisible).toBe(false);
+      expect(result.errorVisible).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -117,75 +80,23 @@ describe("Authentication", () => {
       await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(2000); // Extra wait for client-side routing
 
-      // Check current URL - should be redirected to login
-      const currentUrl = page.url();
-      
-      // Also check if login form elements exist (using Playwright directly)
-      const loginFormExists = await page.$('input[type="email"], input[type="password"], button[type="submit"]');
-      
-      // Either URL contains /login OR we can see login form elements
-      const isOnLoginPage = currentUrl.includes("/login") || loginFormExists !== null;
-      
-      expect(isOnLoginPage).toBe(true);
+      // Use Stagehand to determine whether we're on the login page
+      const redirectResult = await page.extract({
+        instruction:
+          "We just navigated to a protected route while unauthenticated. " +
+          "Determine if we were redirected to the login page.",
+        schema: z.object({
+          onLoginPage: z.boolean().describe("Are we currently on the login page?"),
+          loginFormVisible: z
+            .boolean()
+            .describe("Is a login form with email/password inputs visible?"),
+        }),
+      });
+
+      expect(redirectResult.onLoginPage || redirectResult.loginFormVisible).toBe(
+        true
+      );
     },
     TEST_TIMEOUT
   );
 });
-
-/**
- * Helper to fill login form using direct Playwright (fast, no AI)
- */
-async function fillLoginForm(page: any, email: string, password: string): Promise<void> {
-  const emailSelectors = [
-    'input[type="email"]',
-    'input[name="email"]',
-    'input[placeholder*="email" i]',
-    "#email",
-  ];
-
-  const passwordSelectors = [
-    'input[type="password"]',
-    'input[name="password"]',
-    "#password",
-  ];
-
-  const submitSelectors = [
-    'button[type="submit"]',
-    'button:has-text("Log in")',
-    'button:has-text("Login")',
-    'button:has-text("Sign in")',
-  ];
-
-  // Fill email
-  for (const selector of emailSelectors) {
-    try {
-      const el = await page.$(selector);
-      if (el) {
-        await el.fill(email);
-        break;
-      }
-    } catch {}
-  }
-
-  // Fill password
-  for (const selector of passwordSelectors) {
-    try {
-      const el = await page.$(selector);
-      if (el) {
-        await el.fill(password);
-        break;
-      }
-    } catch {}
-  }
-
-  // Submit
-  for (const selector of submitSelectors) {
-    try {
-      const el = await page.$(selector);
-      if (el) {
-        await el.click();
-        break;
-      }
-    } catch {}
-  }
-}

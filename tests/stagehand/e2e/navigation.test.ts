@@ -6,6 +6,7 @@ import {
   TEST_TIMEOUT,
 } from "../stagehand.config";
 import { ensureAuthenticated } from "../utils/auth";
+import { z } from "zod";
 
 describe("Dashboard & Navigation", () => {
   let stagehand: Stagehand;
@@ -32,26 +33,18 @@ describe("Dashboard & Navigation", () => {
       const url = page.url();
       expect(url).not.toContain("/login");
 
-      // Check for sidebar/navigation
-      const navSelectors = [
-        'nav',
-        '[role="navigation"]',
-        '.sidebar',
-        'aside',
-      ];
+      // Use Stagehand to verify sidebar/navigation is visible
+      const navCheck = await page.extract({
+        instruction:
+          "On the current page, determine if a sidebar or main navigation is visible.",
+        schema: z.object({
+          hasNavigation: z
+            .boolean()
+            .describe("Is a sidebar or main navigation visible?"),
+        }),
+      });
 
-      let hasNav = false;
-      for (const selector of navSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasNav = true;
-            break;
-          }
-        } catch {}
-      }
-
-      expect(hasNav).toBe(true);
+      expect(navCheck.hasNavigation).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -60,17 +53,19 @@ describe("Dashboard & Navigation", () => {
     "should navigate to Founders page",
     async () => {
       const page = stagehand.context.pages()[0];
-      
-      // Direct navigation is faster than clicking
       await page.goto(`${BASE_URL}/founders`);
       await page.waitForLoadState("networkidle");
 
-      // Verify URL - just check we're on the founders page
       const url = page.url();
       expect(url).toContain("/founders");
 
-      // Page loaded successfully
-      expect(true).toBe(true);
+      const pageCheck = await page.extract({
+        instruction: "On the founders page, is the main content (list, table, or cards) visible?",
+        schema: z.object({
+          contentVisible: z.boolean().describe("Is the main founders page content visible?"),
+        }),
+      });
+      expect(pageCheck.contentVisible).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -88,20 +83,18 @@ describe("Dashboard & Navigation", () => {
       const url = page.url();
       expect(url).toContain("/ideas");
 
-      // Check for page content
-      const headerSelectors = ['h1', 'h2', '.header', '[class*="title"]'];
-      let hasHeader = false;
-      for (const selector of headerSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasHeader = true;
-            break;
-          }
-        } catch {}
-      }
+      // Use Stagehand to confirm a main header/title is visible
+      const headerCheck = await page.extract({
+        instruction:
+          "On the ideas page, determine if a main page title or header is visible.",
+        schema: z.object({
+          hasHeader: z
+            .boolean()
+            .describe("Is a main header or title visible on the ideas page?"),
+        }),
+      });
 
-      expect(hasHeader).toBe(true);
+      expect(headerCheck.hasHeader).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -110,16 +103,21 @@ describe("Dashboard & Navigation", () => {
     "should navigate to Admin page",
     async () => {
       const page = stagehand.context.pages()[0];
-      
-      // Direct navigation
       await page.goto(`${BASE_URL}/admin`);
       await page.waitForLoadState("networkidle");
 
-      // Either we're on admin page or redirected (access control)
       const url = page.url();
-      const onAdminOrRedirected = url.includes("/admin") || url.includes("/");
-
-      expect(onAdminOrRedirected).toBe(true);
+      // Must be on admin page or redirected to login (access control)
+      expect(url.includes("/admin") || url.includes("/login")).toBe(true);
+      if (url.includes("/admin")) {
+        const adminCheck = await page.extract({
+          instruction: "On the admin page, is admin content (users list, panel, or access message) visible?",
+          schema: z.object({
+            adminContentVisible: z.boolean().describe("Is admin panel content visible?"),
+          }),
+        });
+        expect(adminCheck.adminContentVisible).toBe(true);
+      }
     },
     TEST_TIMEOUT
   );
@@ -128,16 +126,21 @@ describe("Dashboard & Navigation", () => {
     "should navigate to Traces page",
     async () => {
       const page = stagehand.context.pages()[0];
-      
-      // Direct navigation
       await page.goto(`${BASE_URL}/traces`);
       await page.waitForLoadState("networkidle");
 
-      // Either we're on traces page or redirected (access control)
       const url = page.url();
-      const onTracesOrRedirected = url.includes("/traces") || url.includes("/");
-
-      expect(onTracesOrRedirected).toBe(true);
+      // Must be on traces page or redirected (e.g. to login)
+      expect(url.includes("/traces") || url.includes("/login")).toBe(true);
+      if (url.includes("/traces")) {
+        const tracesCheck = await page.extract({
+          instruction: "On the traces page, is traces content (list, overview, or access message) visible?",
+          schema: z.object({
+            tracesContentVisible: z.boolean().describe("Is traces page content visible?"),
+          }),
+        });
+        expect(tracesCheck.tracesContentVisible).toBe(true);
+      }
     },
     TEST_TIMEOUT
   );

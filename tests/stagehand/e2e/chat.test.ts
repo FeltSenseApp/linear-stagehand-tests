@@ -6,7 +6,7 @@ import {
   BASE_URL,
   TEST_TIMEOUT,
 } from "../stagehand.config";
-import { ensureAuthenticated, executeAction } from "../utils/auth";
+import { ensureAuthenticated } from "../utils/auth";
 
 describe("Annie Chat", () => {
   let stagehand: Stagehand;
@@ -70,7 +70,7 @@ describe("Annie Chat", () => {
       await page.waitForLoadState("networkidle");
 
       // Click new chat button using agent
-      await executeAction(stagehand, "Click the new chat button to create a new conversation");
+      await page.act("Click the new chat button to create a new conversation");
 
       // Check if confirmation dialog appears or new session is created
       const result = await page.extract({
@@ -83,7 +83,7 @@ describe("Annie Chat", () => {
 
       // If confirmation dialog is visible, confirm it
       if (result.confirmDialogVisible) {
-        await executeAction(stagehand, "Click the confirm button to create the chat");
+        await page.act("Click the confirm button to create the chat");
         await page.waitForLoadState("networkidle");
       }
 
@@ -110,10 +110,10 @@ describe("Annie Chat", () => {
       const testMessage = "Hello, this is a test message";
 
       // Type and send message using agent
-      await executeAction(
-        stagehand,
-        `Type "${testMessage}" into the chat input and click the send button to send the message`
-      );
+      await page.act({
+        action: "Type %message% into the chat input and click the send button to send the message",
+        variables: { message: testMessage },
+      });
 
       // Wait for message to appear
       await page.waitForLoadState("networkidle");

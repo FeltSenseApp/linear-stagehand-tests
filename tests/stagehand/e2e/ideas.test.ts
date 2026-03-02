@@ -5,6 +5,7 @@ import {
   BASE_URL,
   TEST_TIMEOUT,
 } from "../stagehand.config";
+import { z } from "zod";
 import { ensureAuthenticated } from "../utils/auth";
 
 describe("Product Ideas", () => {
@@ -32,20 +33,18 @@ describe("Product Ideas", () => {
       const url = page.url();
       expect(url).toContain("/ideas");
 
-      // Check for header
-      const headerSelectors = ['h1', 'h2', '[class*="title"]', '[class*="header"]'];
-      let hasHeader = false;
-      for (const selector of headerSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasHeader = true;
-            break;
-          }
-        } catch {}
-      }
+      // Use Stagehand to verify a main header/title is visible
+      const headerCheck = await page.extract({
+        instruction:
+          "On the ideas page, determine if a main page title or header is visible.",
+        schema: z.object({
+          hasHeader: z
+            .boolean()
+            .describe("Is a main header or title visible on the ideas page?"),
+        }),
+      });
 
-      expect(hasHeader).toBe(true);
+      expect(headerCheck.hasHeader).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -57,31 +56,23 @@ describe("Product Ideas", () => {
       await page.goto(`${BASE_URL}/ideas`);
       await page.waitForLoadState("networkidle");
 
-      // Check for idea cards/list items
-      const cardSelectors = [
-        '.card',
-        '[class*="idea"]',
-        'article',
-        '[role="listitem"]',
-        'li',
-        'table tbody tr',
-      ];
+      // Use Stagehand to detect idea cards/list items or an empty state
+      const ideasCheck = await page.extract({
+        instruction:
+          "On the ideas page, check whether there are any idea cards or list items visible, " +
+          "or if an explicit empty state message is shown instead.",
+        schema: z.object({
+          hasIdeas: z
+            .boolean()
+            .describe("Are any idea cards or list items visible?"),
+          hasEmptyState: z
+            .boolean()
+            .describe("Is an empty-state message visible instead of ideas?"),
+        }),
+      });
 
-      let hasContent = false;
-      let itemCount = 0;
-      for (const selector of cardSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            hasContent = true;
-            itemCount = elements.length;
-            break;
-          }
-        } catch {}
-      }
-
-      // Page has content or is empty state (both valid)
-      expect(true).toBe(true);
+      // Either ideas are shown or an empty state is displayed
+      expect(ideasCheck.hasIdeas || ideasCheck.hasEmptyState).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -93,29 +84,18 @@ describe("Product Ideas", () => {
       await page.goto(`${BASE_URL}/ideas`);
       await page.waitForLoadState("networkidle");
 
-      // Check for sort/filter controls
-      const controlSelectors = [
-        'select',
-        '[role="combobox"]',
-        'button:has-text("Sort")',
-        'button:has-text("Filter")',
-        '[class*="sort"]',
-        '[class*="filter"]',
-      ];
+      const controlsCheck = await page.extract({
+        instruction:
+          "On the ideas page, determine if there are any sort or filter controls " +
+          "such as dropdowns or buttons labeled Sort or Filter.",
+        schema: z.object({
+          hasSortOrFilter: z
+            .boolean()
+            .describe("Is any sort or filter control visible?"),
+        }),
+      });
 
-      let hasControls = false;
-      for (const selector of controlSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasControls = true;
-            break;
-          }
-        } catch {}
-      }
-
-      // Sort/filter may or may not exist - test passes either way
-      expect(true).toBe(true);
+      expect(controlsCheck.hasSortOrFilter).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -127,35 +107,26 @@ describe("Product Ideas", () => {
       await page.goto(`${BASE_URL}/ideas`);
       await page.waitForLoadState("networkidle");
 
+      const actions = await page.observe(
+        "Find the first idea card in the list below the stats (not the Ideas tab, search, or filter buttons)"
+      );
+      if (!actions.length) {
+        expect.fail("No idea card found to click.");
+        return;
+      }
+
       const initialUrl = page.url();
+      await page.act(actions[0]);
+      await page.waitForTimeout(1000);
 
-      // Try clicking on an idea
-      const cardSelectors = [
-        '.card',
-        '[class*="idea"]',
-        'article',
-        '[role="button"]',
-        'a[href*="idea"]',
-      ];
+      const detailCheck = await page.extract({
+        instruction: "Is a modal, side panel, or drawer with idea details visible (not just the list)?",
+        schema: z.object({
+          detailVisible: z.boolean().describe("Is idea detail modal/panel visible?"),
+        }),
+      });
 
-      let clicked = false;
-      for (const selector of cardSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            await elements[0].click();
-            clicked = true;
-            break;
-          }
-        } catch {}
-      }
-
-      if (clicked) {
-        await page.waitForTimeout(500);
-      }
-
-      // Either we clicked something or there's nothing to click
-      expect(true).toBe(true);
+      expect(page.url() !== initialUrl || detailCheck.detailVisible).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -167,21 +138,19 @@ describe("Product Ideas", () => {
       await page.goto(`${BASE_URL}/ideas`);
       await page.waitForLoadState("networkidle");
 
-      // Check for any meaningful content
-      const contentSelectors = ['main', '[role="main"]', '.content', 'article', 'section'];
-      
-      let hasContent = false;
-      for (const selector of contentSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasContent = true;
-            break;
-          }
-        } catch {}
-      }
+      // Use Stagehand to verify meaningful page content is visible
+      const contentCheck = await page.extract({
+        instruction:
+          "On the ideas page, determine if there is meaningful main content visible " +
+          "such as idea lists, cards, or explanatory text.",
+        schema: z.object({
+          hasContent: z
+            .boolean()
+            .describe("Is meaningful main content visible on the ideas page?"),
+        }),
+      });
 
-      expect(hasContent).toBe(true);
+      expect(contentCheck.hasContent).toBe(true);
     },
     TEST_TIMEOUT
   );

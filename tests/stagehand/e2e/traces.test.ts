@@ -6,7 +6,7 @@ import {
   BASE_URL,
   TEST_TIMEOUT,
 } from "../stagehand.config";
-import { ensureAuthenticated, executeAction } from "../utils/auth";
+import { ensureAuthenticated } from "../utils/auth";
 
 describe("Traces View", () => {
   let stagehand: Stagehand;
@@ -42,8 +42,7 @@ describe("Traces View", () => {
     "should load traces page with traces list",
     async () => {
       if (!hasAccess) {
-        console.log("Skipping traces test - user does not have access");
-        expect(true).toBe(true);
+        expect.fail("Test requires traces access; current user does not have access to the traces page.");
         return;
       }
 
@@ -56,31 +55,23 @@ describe("Traces View", () => {
       const url = page.url();
       const onTracesPage = url.includes("/traces");
 
-      // Check for list elements using Playwright
-      const listSelectors = [
-        'table',
-        '[role="table"]',
-        '[role="list"]',
-        '.trace-list',
-        'ul li',
-        '[data-testid*="trace"]',
-      ];
-      
-      let listFound = false;
-      for (const selector of listSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            listFound = true;
-            break;
-          }
-        } catch {}
-      }
+      // Use Stagehand to determine if a traces list or empty state is visible
+      const listCheck = await page.extract({
+        instruction:
+          "On the traces page, determine if a list or table of traces is visible, " +
+          "or if an explicit empty state is shown instead.",
+        schema: z.object({
+          hasTracesList: z
+            .boolean()
+            .describe("Is a list or table of traces visible?"),
+          hasEmptyState: z
+            .boolean()
+            .describe("Is an empty-state message visible instead?"),
+        }),
+      });
 
-      // Page loaded if we're on traces URL
       expect(onTracesPage).toBe(true);
-      // List may or may not be visible (could be empty state) - just verify page loaded
-      expect(onTracesPage).toBe(true);
+      expect(listCheck.hasTracesList || listCheck.hasEmptyState).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -89,8 +80,7 @@ describe("Traces View", () => {
     "should toggle between Overview and Traces views",
     async () => {
       if (!hasAccess) {
-        console.log("Skipping traces test - user does not have access");
-        expect(true).toBe(true);
+        expect.fail("Test requires traces access; current user does not have access to the traces page.");
         return;
       }
 
@@ -107,9 +97,13 @@ describe("Traces View", () => {
         }),
       });
 
-      if (toggleCheck.overviewTabVisible) {
-        // Switch to Overview
-        await executeAction(stagehand, "Click on the Overview tab to switch views");
+      if (!toggleCheck.overviewTabVisible) {
+        expect.fail("Traces page has no Overview/Traces view toggle.");
+        return;
+      }
+
+      // Switch to Overview
+        await page.act("Click on the Overview tab to switch views");
         await page.waitForLoadState("networkidle");
 
         const overviewResult = await page.extract({
@@ -124,7 +118,7 @@ describe("Traces View", () => {
         expect(overviewResult.overviewVisible).toBe(true);
 
         // Switch back to Traces
-        await executeAction(stagehand, "Click on the Traces tab to go back to the list");
+        await page.act("Click on the Traces tab to go back to the list");
         await page.waitForLoadState("networkidle");
 
         const tracesResult = await page.extract({
@@ -135,10 +129,6 @@ describe("Traces View", () => {
         });
 
         expect(tracesResult.tracesListVisible).toBe(true);
-      } else {
-        // View toggle may not exist
-        expect(true).toBe(true);
-      }
     },
     TEST_TIMEOUT
   );
@@ -147,9 +137,7 @@ describe("Traces View", () => {
     "should display trace detail when clicking on a trace",
     async () => {
       if (!hasAccess) {
-        console.log("Skipping traces test - user does not have access");
-        expect(true).toBe(true);
-        return;
+        expect.fail("Test requires traces access; current user does not have access to the traces page.");
       }
 
       const page = stagehand.context.pages()[0];
@@ -157,64 +145,44 @@ describe("Traces View", () => {
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(2000);
 
+      // Require at least one trace in the list; otherwise we cannot verify detail view
+      const listState = await page.extract({
+        instruction:
+          "On the traces page, are there any trace rows, items, or rows in a table that represent a trace (i.e. clickable traces in the list)?",
+        schema: z.object({
+          hasTraceRows: z
+            .boolean()
+            .describe("Are there one or more trace rows/items in the list to click?"),
+        }),
+      });
+
+      if (!listState.hasTraceRows) {
+        expect.fail(
+          "No traces in list; cannot verify trace detail. The test expects at least one trace row to click."
+        );
+        return;
+      }
+
       const initialUrl = page.url();
 
-      // Check if there are clickable items (traces) using Playwright
-      const traceSelectors = [
-        'table tbody tr',
-        '[role="row"]',
-        '.trace-item',
-        '[data-testid*="trace"]',
-        'li',
-      ];
-      
-      let hasTraceItems = false;
-      for (const selector of traceSelectors) {
-        try {
-          const items = await page.$$(selector);
-          if (items.length > 0) {
-            hasTraceItems = true;
-            break;
-          }
-        } catch {}
-      }
+      await page.act("Click on the first trace row or item in the list");
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(2000);
 
-      if (hasTraceItems) {
-        // Click on the first trace using AI agent
-        await executeAction(stagehand, "Click on the first trace row or item in the list");
-        await page.waitForLoadState("networkidle");
-        await page.waitForTimeout(2000);
+      const newUrl = page.url();
+      const urlChanged = newUrl !== initialUrl;
 
-        // Verify something changed - URL or page content
-        const newUrl = page.url();
-        const urlChanged = newUrl !== initialUrl;
-        
-        // Or check for detail panel/modal
-        const detailSelectors = [
-          '[role="dialog"]',
-          '.modal',
-          '.detail',
-          '.panel',
-          '[data-testid*="detail"]',
-        ];
-        
-        let detailVisible = false;
-        for (const selector of detailSelectors) {
-          try {
-            const el = await page.$(selector);
-            if (el && await el.isVisible()) {
-              detailVisible = true;
-              break;
-            }
-          } catch {}
-        }
+      const detailCheck = await page.extract({
+        instruction:
+          "Is a trace detail view, detail panel, or trace detail modal visible (content showing a single trace's details, spans, or timeline)? Not the main traces list.",
+        schema: z.object({
+          detailVisible: z
+            .boolean()
+            .describe("Is a trace detail view/panel/modal visible (single trace details), not the list?"),
+        }),
+      });
 
-        // Test passes if URL changed or detail view appeared
-        expect(urlChanged || detailVisible || hasTraceItems).toBe(true);
-      } else {
-        // No traces to click - that's okay
-        expect(true).toBe(true);
-      }
+      expect(urlChanged || detailCheck.detailVisible).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -223,9 +191,7 @@ describe("Traces View", () => {
     "should display trace spans in timeline",
     async () => {
       if (!hasAccess) {
-        console.log("Skipping traces test - user does not have access");
-        expect(true).toBe(true);
-        return;
+        expect.fail("Test requires traces access; current user does not have access to the traces page.");
       }
 
       const page = stagehand.context.pages()[0];
@@ -240,25 +206,24 @@ describe("Traces View", () => {
         }),
       });
 
-      if (hasTraces.hasTraces) {
-        // Click on a trace
-        await executeAction(stagehand, "Click on the first trace to view its details");
-        await page.waitForLoadState("networkidle");
-
-        const spansResult = await page.extract({
-          instruction: "Check if trace spans are visible in the timeline",
-          schema: z.object({
-            spansVisible: z.boolean().describe("Are trace spans visible?"),
-            spanCount: z.number().describe("How many spans are visible?"),
-            hasNestedSpans: z.boolean().describe("Are there nested/child spans?"),
-          }),
-        });
-
-        // If we got to the detail view, it should show spans or indicate empty
-        expect(spansResult.spansVisible !== undefined).toBe(true);
-      } else {
-        expect(true).toBe(true);
+      if (!hasTraces.hasTraces) {
+        expect.fail("No traces in list; cannot verify trace spans in timeline.");
       }
+
+      await page.act("Click on the first trace to view its details");
+      await page.waitForLoadState("networkidle");
+
+      const spansResult = await page.extract({
+        instruction: "Check if trace spans are visible in the timeline",
+        schema: z.object({
+          spansVisible: z.boolean().describe("Are trace spans visible?"),
+          spanCount: z.number().describe("How many spans are visible?"),
+          hasNestedSpans: z.boolean().describe("Are there nested/child spans?"),
+        }),
+      });
+
+      // We reached the detail view; it must expose span info (even if empty)
+      expect(spansResult.spansVisible !== undefined).toBe(true);
     },
     TEST_TIMEOUT
   );

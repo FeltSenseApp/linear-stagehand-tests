@@ -7,7 +7,7 @@ import {
   BASE_URL,
   TEST_TIMEOUT,
 } from "../stagehand.config";
-import { ensureAuthenticated, executeAction } from "../utils/auth";
+import { ensureAuthenticated } from "../utils/auth";
 
 describe("Admin Features", () => {
   let stagehand: Stagehand;
@@ -45,8 +45,7 @@ describe("Admin Features", () => {
     "should load admin panel with users list",
     async () => {
       if (!isAdmin) {
-        console.log("Skipping admin test - user is not an admin");
-        expect(true).toBe(true);
+        expect.fail("Test requires admin access; current user does not have access to the admin panel.");
         return;
       }
 
@@ -55,34 +54,28 @@ describe("Admin Features", () => {
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(2000); // Wait for data to load
 
-      // Use Playwright to check for common list patterns
-      const listSelectors = [
-        'table',
-        '[role="table"]',
-        '[role="list"]',
-        '.user-list',
-        '.users',
-        'ul li',
-      ];
-      
-      let listFound = false;
-      for (const selector of listSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            listFound = true;
-            break;
-          }
-        } catch {}
-      }
-
-      // Also verify we're on the admin page (not redirected)
+      // Verify we're on the admin page (not redirected)
       const url = page.url();
       const onAdminPage = url.includes("/admin");
 
+      // Use Stagehand to check for a users list or an empty/admin info state
+      const listCheck = await page.extract({
+        instruction:
+          "On the admin page, determine if a users list or table is visible, " +
+          "or if an empty state or access information is shown instead.",
+        schema: z.object({
+          hasUsersList: z
+            .boolean()
+            .describe("Is a users list or table visible on the admin page?"),
+          hasEmptyOrInfoState: z
+            .boolean()
+            .describe("Is an empty state or admin information message visible instead?"),
+        }),
+      });
+
       expect(onAdminPage).toBe(true);
-      // If we're on admin page, assume panel loaded - list visibility is optional
-      expect(onAdminPage || listFound).toBe(true);
+      // Panel is considered loaded if we're on the admin page and either a list or info state is visible
+      expect(listCheck.hasUsersList || listCheck.hasEmptyOrInfoState).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -91,8 +84,7 @@ describe("Admin Features", () => {
     "should have working user search",
     async () => {
       if (!isAdmin) {
-        console.log("Skipping admin test - user is not an admin");
-        expect(true).toBe(true);
+        expect.fail("Test requires admin access; current user does not have access to the admin panel.");
         return;
       }
 
@@ -108,25 +100,27 @@ describe("Admin Features", () => {
         }),
       });
 
-      if (searchCheck.searchInputVisible) {
-        // Search for a user
-        await executeAction(stagehand, `Type "${envs.portalUsername}" into the user search input`);
-        await page.waitForLoadState("networkidle");
-
-        const searchResult = await page.extract({
-          instruction: "After searching, how many users are shown in the filtered results?",
-          schema: z.object({
-            filteredCount: z.number().describe("Number of users shown after search"),
-            searchWorked: z.boolean().describe("Did the search filter the results?"),
-          }),
-        });
-
-        expect(searchResult.searchWorked).toBe(true);
-        expect(searchResult.filteredCount).toBeGreaterThan(0);
-      } else {
-        // Search may not exist
-        expect(true).toBe(true);
+      if (!searchCheck.searchInputVisible) {
+        expect.fail("Admin panel has no user search input.");
+        return;
       }
+
+      await page.act({
+        action: "Type %username% into the user search input",
+        variables: { username: envs.portalUsername },
+      });
+      await page.waitForLoadState("networkidle");
+
+      const searchResult = await page.extract({
+        instruction: "After searching, how many users are shown in the filtered results?",
+        schema: z.object({
+          filteredCount: z.number().describe("Number of users shown after search"),
+          searchWorked: z.boolean().describe("Did the search filter the results?"),
+        }),
+      });
+
+      expect(searchResult.searchWorked).toBe(true);
+      expect(searchResult.filteredCount).toBeGreaterThan(0);
     },
     TEST_TIMEOUT
   );
@@ -135,8 +129,7 @@ describe("Admin Features", () => {
     "should display user details when clicking on a user",
     async () => {
       if (!isAdmin) {
-        console.log("Skipping admin test - user is not an admin");
-        expect(true).toBe(true);
+        expect.fail("Test requires admin access; current user does not have access to the admin panel.");
         return;
       }
 
@@ -145,7 +138,7 @@ describe("Admin Features", () => {
       await page.waitForLoadState("networkidle");
 
       // Click on a user
-      await executeAction(stagehand, "Click on the first user in the users list");
+      await page.act("Click on the first user in the users list");
       await page.waitForLoadState("networkidle");
 
       const userDetails = await page.extract({
@@ -166,8 +159,7 @@ describe("Admin Features", () => {
     "should show founder assignment functionality",
     async () => {
       if (!isAdmin) {
-        console.log("Skipping admin test - user is not an admin");
-        expect(true).toBe(true);
+        expect.fail("Test requires admin access; current user does not have access to the admin panel.");
         return;
       }
 
@@ -176,34 +168,34 @@ describe("Admin Features", () => {
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(2000);
 
-      // Click on a user first using agent
-      await executeAction(stagehand, "Click on the first user in the users list or table");
+      const hasUsers = await page.extract({
+        instruction: "On the admin page, is there a users list or table with at least one user row to click?",
+        schema: z.object({
+          hasUsers: z.boolean().describe("Are there one or more users in the list/table to click?"),
+        }),
+      });
+      if (!hasUsers.hasUsers) {
+        expect.fail("Admin panel has no users list or no user rows to click.");
+        return;
+      }
+
+      await page.act("Click on the first user in the users list or table");
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(2000);
 
-      // Check for any form of assignment UI using Playwright
-      const assignmentSelectors = [
-        'button:has-text("assign")',
-        '[data-testid*="assign"]',
-        'select',
-        '.dropdown',
-        '[role="listbox"]',
-      ];
-      
-      let assignmentUIFound = false;
-      for (const selector of assignmentSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            assignmentUIFound = true;
-            break;
-          }
-        } catch {}
-      }
+      const assignmentCheck = await page.extract({
+        instruction:
+          "After selecting a user in the admin panel, determine if any UI for assigning founders " +
+          "is visible, such as assign buttons, dropdowns, or listboxes.",
+        schema: z.object({
+          assignmentUIVisible: z
+            .boolean()
+            .describe("Is founder assignment UI visible for the selected user?"),
+        }),
+      });
 
-      // If we found assignment UI or if a user detail view opened, test passes
       const urlChanged = !page.url().endsWith("/admin");
-      expect(assignmentUIFound || urlChanged).toBe(true);
+      expect(assignmentCheck.assignmentUIVisible || urlChanged).toBe(true);
     },
     TEST_TIMEOUT
   );

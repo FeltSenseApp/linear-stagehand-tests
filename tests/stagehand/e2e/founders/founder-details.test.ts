@@ -8,6 +8,7 @@ import {
 } from "../../stagehand.config";
 import { ensureAuthenticated } from "../../utils/auth";
 
+
 describe("Founder Details", () => {
   let stagehand: Stagehand;
 
@@ -29,45 +30,27 @@ describe("Founder Details", () => {
       await page.goto(`${BASE_URL}/founders`);
       await page.waitForLoadState("networkidle");
 
+      const hasFounders = await page.extract({
+        instruction: "Are there any founder cards, rows, or list items to click on the founders page?",
+        schema: z.object({
+          hasFounders: z.boolean().describe("Are there one or more founder entries to click?"),
+        }),
+      });
+      if (!hasFounders.hasFounders) {
+        expect.fail("No founder cards/rows on the list; cannot verify opening founder details.");
+        return;
+      }
+
       const initialUrl = page.url();
+      await page.act("Click on the first founder card, row, or list item to open its details");
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(1000);
 
-      // Try direct selectors for founder cards (much faster than AI)
-      const cardSelectors = [
-        '[data-testid*="founder"]',
-        '.founder-card',
-        '[class*="founder"]',
-        'a[href*="/founder"]',
-        'div[role="button"]',
-        '.card',
-        'article',
-        'li a',
-        'table tbody tr',
-        '[role="row"]',
-      ];
-
-      let clicked = false;
-      for (const selector of cardSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            await elements[0].click();
-            clicked = true;
-            break;
-          }
-        } catch {}
-      }
-
-      if (clicked) {
-        await page.waitForLoadState("networkidle");
-        await page.waitForTimeout(1000);
-      }
-
-      // Check if we navigated to a detail page
       const newUrl = page.url();
       const navigated = newUrl !== initialUrl;
+      const onDetailUrl = newUrl.includes("/founder");
 
-      // Verify we're on a detail page (URL changed or contains founder ID)
-      expect(navigated || newUrl.includes("/founder")).toBe(true);
+      expect(navigated || onDetailUrl).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -79,57 +62,46 @@ describe("Founder Details", () => {
       await page.goto(`${BASE_URL}/founders`);
       await page.waitForLoadState("networkidle");
 
-      // Click on a founder card using direct selectors
-      const cardSelectors = [
-        'a[href*="/founder"]',
-        '[data-testid*="founder"]',
-        '.founder-card',
-        '.card',
-        'table tbody tr',
-      ];
-
-      for (const selector of cardSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            await elements[0].click();
-            break;
-          }
-        } catch {}
+      const hasFounders = await page.extract({
+        instruction: "Are there any founder cards, rows, or list items to click on the founders page?",
+        schema: z.object({
+          hasFounders: z.boolean().describe("Are there one or more founder entries to click?"),
+        }),
+      });
+      if (!hasFounders.hasFounders) {
+        expect.fail("No founder entries on the list; cannot verify detail tabs.");
+        return;
       }
 
+      await page.act("Click a founder entry to open the founder detail view");
       await page.waitForLoadState("networkidle");
 
-      // Check if tabs exist and try clicking one
-      const tabSelectors = [
-        '[role="tab"]',
-        '[role="tablist"] button',
-        'button:has-text("Financials")',
-        'button:has-text("Website")',
-        'button:has-text("Overview")',
-        '.tab',
-      ];
-
-      let tabClicked = false;
-      for (const selector of tabSelectors) {
-        try {
-          const tabs = await page.$$(selector);
-          if (tabs.length > 1) {
-            // Click the second tab (first is usually already selected)
-            await tabs[1].click();
-            tabClicked = true;
-            break;
-          }
-        } catch {}
-      }
-
-      await page.waitForLoadState("networkidle");
-
-      // Verify we're on detail page
       const currentUrl = page.url();
       const onDetailPage = currentUrl !== `${BASE_URL}/founders`;
+      if (!onDetailPage) {
+        expect.fail("Did not reach founder detail page after clicking a founder.");
+        return;
+      }
 
-      expect(onDetailPage).toBe(true);
+      await page.act("Click on a different tab such as Financials, Website, or Overview that is not currently selected");
+      await page.waitForLoadState("networkidle");
+
+      const tabCheck = await page.extract({
+        instruction:
+          "On the founder detail view, determine if multiple tabs are visible " +
+          "and if content for the currently selected tab is visible.",
+        schema: z.object({
+          tabsVisible: z
+            .boolean()
+            .describe("Are multiple tabs visible in the founder detail view?"),
+          tabContentVisible: z
+            .boolean()
+            .describe("Is content for the selected tab visible?"),
+        }),
+      });
+
+      expect(tabCheck.tabsVisible).toBe(true);
+      expect(tabCheck.tabContentVisible).toBe(true);
     },
     TEST_TIMEOUT
   );
@@ -141,52 +113,39 @@ describe("Founder Details", () => {
       await page.goto(`${BASE_URL}/founders`);
       await page.waitForLoadState("networkidle");
 
-      // Click on a founder card using direct selectors
-      const cardSelectors = [
-        'a[href*="/founder"]',
-        '[data-testid*="founder"]',
-        '.founder-card',
-        '.card',
-        'table tbody tr',
-      ];
-
-      for (const selector of cardSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            await elements[0].click();
-            break;
-          }
-        } catch {}
+      const hasFounders = await page.extract({
+        instruction: "Are there any founder cards, rows, or list items to click on the founders page?",
+        schema: z.object({
+          hasFounders: z.boolean().describe("Are there one or more founder entries to click?"),
+        }),
+      });
+      if (!hasFounders.hasFounders) {
+        expect.fail("No founder entries on the list; cannot verify overview.");
+        return;
       }
 
+      await page.act("Click a founder to open the founder detail view");
       await page.waitForLoadState("networkidle");
 
-      // Check for content on the detail page
-      const contentSelectors = [
-        'h1', 'h2', // Headers with founder name
-        '[class*="company"]',
-        '[class*="contact"]',
-        '[class*="summary"]',
-        'p', // Any paragraph text
-      ];
-
-      let hasContent = false;
-      for (const selector of contentSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el && await el.isVisible()) {
-            hasContent = true;
-            break;
-          }
-        } catch {}
-      }
-
-      // Verify we navigated and have content
       const currentUrl = page.url();
       const onDetailPage = currentUrl !== `${BASE_URL}/founders`;
+      if (!onDetailPage) {
+        expect.fail("Did not reach founder detail page after clicking a founder.");
+        return;
+      }
 
-      expect(onDetailPage || hasContent).toBe(true);
+      const overviewCheck = await page.extract({
+        instruction:
+          "On the founder detail view, determine if overview information is visible, " +
+          "such as the founder's name, company, contact details, or a summary section.",
+        schema: z.object({
+          overviewVisible: z
+            .boolean()
+            .describe("Is overview information visible for the founder?"),
+        }),
+      });
+
+      expect(overviewCheck.overviewVisible).toBe(true);
     },
     TEST_TIMEOUT
   );

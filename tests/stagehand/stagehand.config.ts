@@ -1,7 +1,6 @@
 import { Stagehand } from "@browserbasehq/stagehand";
 import dotenv from "dotenv";
 import path from "path";
-import { loadCookies } from "./global-setup";
 
 // Load environment variables - explicitly specify path for spawned processes
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -43,16 +42,32 @@ export function useBrowserbase(): boolean {
 }
 
 /**
- * Creates and initializes a Stagehand instance for testing
- * Automatically loads cached auth cookies if available
- * Uses Browserbase in production, local Chrome in development
+ * Verbosity for Stagehand logging (see https://docs.stagehand.dev/configuration/logging):
+ * - 0: Errors only
+ * - 1: Info — act/extract started and completed
+ * - 2: Debug — DOM snapshots, element counts, LLM inference details
+ * Set STAGEHAND_VERBOSE=1 or STAGEHAND_VERBOSE=2 when running tests for tracing.
+ */
+function getVerbose(): 0 | 1 | 2 {
+  const v = process.env.STAGEHAND_VERBOSE;
+  if (v === "2") return 2;
+  if (v === "1") return 1;
+  return 0;
+}
+
+/**
+ * Creates and initializes a Stagehand instance for testing.
+ * Uses Browserbase in production, local Chrome in development.
  */
 export async function createStagehand(): Promise<Stagehand> {
   const cloudMode = useBrowserbase();
   
   const stagehand = new Stagehand({
     env: cloudMode ? "BROWSERBASE" : "LOCAL",
-    verbose: 0,
+    verbose: getVerbose(),
+    // Optional: set logInferenceToFile: true to write LLM request/response dumps to ./inference_summary/ (dev only)
+    ...(process.env.STAGEHAND_LOG_INFERENCE === "1" ? { logInferenceToFile: true } : {}),
+    // Optional: set BROWSERBASE_CONFIG_DIR=~/.config/browserbase for session logs (llm_events.log, cdp_events.log, stagehand.log)
     ...(cloudMode ? {
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
@@ -98,18 +113,11 @@ export async function createStagehand(): Promise<Stagehand> {
     throw initError;
   }
 
-  // Load cached cookies for authentication
-  const cookies = loadCookies();
-  if (cookies.length > 0) {
-    await stagehand.context.addCookies(cookies);
-  }
-
   return stagehand;
 }
 
 /**
- * Creates a Stagehand instance with cached auth already applied
- * Use this instead of createStagehand + ensureLoggedIn for faster tests
+ * Creates a Stagehand instance. Call ensureAuthenticated() to log in.
  */
 export async function createAuthenticatedStagehand(): Promise<Stagehand> {
   const stagehand = await createStagehand();

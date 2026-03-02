@@ -6,6 +6,7 @@ import {
   TEST_TIMEOUT,
 } from "../../stagehand.config";
 import { ensureAuthenticated } from "../../utils/auth";
+import { z } from "zod";
 
 describe("Founder List", () => {
   let stagehand: Stagehand;
@@ -32,33 +33,24 @@ describe("Founder List", () => {
       const url = page.url();
       expect(url).toContain("/founders");
 
-      // Look for list elements using direct selectors
-      const listSelectors = [
-        'table tbody tr',
-        '[data-testid*="founder"]',
-        '.founder-card',
-        '.card',
-        '[role="row"]',
-        'article',
-        'li',
-      ];
-
-      let foundItems = false;
-      let itemCount = 0;
-      for (const selector of listSelectors) {
-        try {
-          const elements = await page.$$(selector);
-          if (elements.length > 0) {
-            foundItems = true;
-            itemCount = elements.length;
-            break;
-          }
-        } catch {}
-      }
+      // Use Stagehand to detect founders in a list, table, or cards
+      const listCheck = await page.extract({
+        instruction:
+          "On the founders page, determine whether any founders are visible " +
+          "in a list, table, grid, or set of cards, and roughly how many.",
+        schema: z.object({
+          hasFounders: z
+            .boolean()
+            .describe("Are any founders visible in the list/table/cards?"),
+          count: z
+            .number()
+            .describe("Approximate number of visible founders, 0 if none."),
+        }),
+      });
 
       // Page loaded and has content
-      expect(foundItems).toBe(true);
-      expect(itemCount).toBeGreaterThan(0);
+      expect(listCheck.hasFounders).toBe(true);
+      expect(listCheck.count).toBeGreaterThan(0);
     },
     TEST_TIMEOUT
   );
@@ -70,38 +62,36 @@ describe("Founder List", () => {
       await page.goto(`${BASE_URL}/founders`);
       await page.waitForLoadState("networkidle");
 
-      // Look for search input using direct selectors
-      const searchSelectors = [
-        'input[type="search"]',
-        'input[placeholder*="search" i]',
-        'input[placeholder*="filter" i]',
-        '[data-testid*="search"]',
-        '.search-input',
-      ];
+      const searchCheck = await page.extract({
+        instruction:
+          "On the founders page, determine if there is a search or filter input " +
+          "for the founders list.",
+        schema: z.object({
+          hasSearch: z
+            .boolean()
+            .describe("Is there a search or filter input for founders?"),
+        }),
+      });
 
-      let searchInput = null;
-      for (const selector of searchSelectors) {
-        try {
-          const el = await page.$(selector);
-          if (el) {
-            searchInput = el;
-            break;
-          }
-        } catch {}
+      if (!searchCheck.hasSearch) {
+        expect.fail("Founders list has no search or filter input to test.");
+        return;
       }
 
-      if (searchInput) {
-        // Type in search box
-        await searchInput.fill("test");
-        await page.waitForTimeout(500);
-        await page.waitForLoadState("networkidle");
+      await page.act('Type "test" into the founders search or filter input');
+      await page.waitForTimeout(500);
+      await page.waitForLoadState("networkidle");
 
-        // Search was used successfully
-        expect(true).toBe(true);
-      } else {
-        // No search feature - test passes
-        expect(true).toBe(true);
-      }
+      const afterSearch = await page.extract({
+        instruction:
+          "After typing in the search/filter, did the list update (e.g. filtered results, or search applied)?",
+        schema: z.object({
+          searchApplied: z
+            .boolean()
+            .describe("Did the search or filter appear to be applied (list updated or filtered)?"),
+        }),
+      });
+      expect(afterSearch.searchApplied).toBe(true);
     },
     TEST_TIMEOUT
   );
