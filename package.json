@@ -12,7 +12,8 @@
     "dev": "bun --watch src/index.ts",
     "test:manual": "bun run src/test-manual.ts",
     "test:stagehand": "vitest run tests/stagehand",
-    "test:stagehand:watch": "vitest tests/stagehand"
+    "test:stagehand:watch": "vitest tests/stagehand",
+    "test:scenarios": "vitest run tests/stagehand/scenarios"
   },
   "keywords": [
     "stagehand",

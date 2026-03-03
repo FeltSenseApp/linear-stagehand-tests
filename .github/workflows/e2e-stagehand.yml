@@ -123,7 +123,7 @@ jobs:
             sleep 2
           done
           cd $GITHUB_WORKSPACE
-          bun run test:stagehand
+          bun run test:scenarios
 
       # - name: Skip E2E (FELTSENSE_REPO not set)
       #   if: env.FELTSENSE_REPO == ''

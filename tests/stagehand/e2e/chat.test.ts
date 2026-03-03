@@ -69,7 +69,7 @@ describe("Annie Chat", () => {
       await page.goto(`${BASE_URL}/`);
       await page.waitForLoadState("networkidle");
 
-      // Click new chat button using agent
+      // Click new chat button using act
       await page.act("Click the new chat button to create a new conversation");
 
       // Check if confirmation dialog appears or new session is created
@@ -109,7 +109,7 @@ describe("Annie Chat", () => {
 
       const testMessage = "Hello, this is a test message";
 
-      // Type and send message using agent
+      // Type and send message using act
       await page.act({
         action: "Type %message% into the chat input and click the send button to send the message",
         variables: { message: testMessage },
