@@ -41,7 +41,7 @@ describe("Admin Features", () => {
     }
   });
 
-  it.skip(
+  it(
     "should load admin panel with users list",
     async () => {
       if (!isAdmin) {

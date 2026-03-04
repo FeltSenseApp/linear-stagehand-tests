@@ -2,6 +2,7 @@ import { Stagehand } from "@browserbasehq/stagehand";
 import * as path from "path";
 import dotenv from "dotenv";
 import { seedDemoProfile } from "./utils/seed-profile";
+import { createStagehand } from "./stagehand.config";
 
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -14,7 +15,7 @@ export async function setup() {
   console.log("\n🔧 Global Setup: Initializing browser and logging in...\n");
   // Make sure the demo profile exists for the auth user
   console.log("  → Seeding Supabase demo profile...");
-  await seedDemoProfile();
+  // await seedDemoProfile();
 
   const portalUrl = process.env.PORTAL_URL || "http://localhost:5173";
   const username = process.env.PORTAL_USERNAME;
@@ -32,18 +33,8 @@ export async function setup() {
     console.log("  → Using Browserbase for cloud browser automation");
   }
 
-  const stagehand = new Stagehand({
-    env: useBrowserbase ? "BROWSERBASE" : "LOCAL",
-    verbose: 0,
-    ...(useBrowserbase ? {
-      apiKey: process.env.BROWSERBASE_API_KEY,
-      projectId: process.env.BROWSERBASE_PROJECT_ID,
-    } : {
-      localBrowserLaunchOptions: {
-        headless: true,
-      },
-    }),
-  });
+  const stagehand = await createStagehand();
+
   
   let initialized = false;
 

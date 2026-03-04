@@ -117,20 +117,6 @@ export async function createStagehand(): Promise<Stagehand> {
 }
 
 /**
- * Creates a Stagehand instance. Call ensureAuthenticated() to log in.
- */
-export async function createAuthenticatedStagehand(): Promise<Stagehand> {
-  const stagehand = await createStagehand();
-
-  // Navigate to base to apply cookies
-  const page = stagehand.context.pages()[0];
-  await page.goto(BASE_URL);
-  await page.waitForLoadState("networkidle");
-
-  return stagehand;
-}
-
-/**
  * Base URL for the application under test
  */
 export const BASE_URL = process.env.PORTAL_URL || "http://localhost:5173";

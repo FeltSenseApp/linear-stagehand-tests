@@ -82,7 +82,6 @@ export default defineConfig({
     
     // Vitest 4: Use top-level pool options instead of nested poolOptions
     maxWorkers: OPTIMAL_WORKERS,
-    minWorkers: 1,
 
     // Include test files
     include: ["tests/**/*.test.ts"],
